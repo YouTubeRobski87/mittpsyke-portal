@@ -13,11 +13,92 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://bolt.new/static/og_default.png" />
 
+    <!-- Load Supabase configuration from environment variables -->
+    <script src="/api/config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
     <!-- FIX: dessa filer ligger i root i din deploy -->
     <script type="module" crossorigin src="/index-B6kAGb4L.js"></script>
     <link rel="stylesheet" crossorigin href="/index-ezn70K-b.css" />
 
     <script async src="https://bolt.new/badge.js?s=7e4b06c9-0b49-4b1e-bd89-f4fdacb4df12"></script>
+
+    <!-- Authentication handler for OAuth callback -->
+    <script>
+      // Handle OAuth callback (hash-based tokens from Supabase)
+      (function() {
+        // Check if we have auth tokens in the URL hash or query params
+        const hash = window.location.hash;
+        const params = new URLSearchParams(window.location.search);
+
+        if (hash && hash.includes('access_token')) {
+          // Hash-based callback (implicit flow)
+          console.log('Processing OAuth callback from hash...');
+          // The Supabase client in the React app will pick this up automatically
+        }
+
+        if (params.has('code')) {
+          // Authorization code callback
+          console.log('Processing OAuth callback with code...');
+          // Initialize Supabase to exchange the code
+          if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+            const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+            supabase.auth.exchangeCodeForSession(params.get('code')).then(({ data, error }) => {
+              if (error) {
+                console.error('Code exchange error:', error);
+              } else {
+                console.log('Session established successfully');
+                // Clean up URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+            });
+          }
+        }
+
+        // Make auth helper available globally
+        window.MittPsykeAuth = {
+          getSupabase: function() {
+            if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+              return window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+            }
+            return null;
+          },
+          signInWithGoogle: async function() {
+            const client = this.getSupabase();
+            if (!client) {
+              console.error('Supabase not configured');
+              return { error: { message: 'Supabase not configured' } };
+            }
+            return client.auth.signInWithOAuth({
+              provider: 'google',
+              options: {
+                redirectTo: window.location.origin + '/auth/callback',
+              },
+            });
+          },
+          signOut: async function() {
+            const client = this.getSupabase();
+            if (!client) return { error: { message: 'Supabase not configured' } };
+            return client.auth.signOut();
+          },
+          getSession: async function() {
+            const client = this.getSupabase();
+            if (!client) return { data: { session: null } };
+            return client.auth.getSession();
+          },
+          getUser: async function() {
+            const client = this.getSupabase();
+            if (!client) return { data: { user: null } };
+            return client.auth.getUser();
+          },
+          onAuthStateChange: function(callback) {
+            const client = this.getSupabase();
+            if (!client) return { data: { subscription: { unsubscribe: () => {} } } };
+            return client.auth.onAuthStateChange(callback);
+          }
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
